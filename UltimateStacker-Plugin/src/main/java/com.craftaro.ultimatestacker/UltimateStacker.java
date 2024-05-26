@@ -139,8 +139,7 @@ public class UltimateStacker extends SongodaPlugin {
 
         PluginManager pluginManager = Bukkit.getPluginManager();
         this.superiorSkyblock2Hook = new SuperiorSkyblock2Hook(pluginManager.isPluginEnabled("SuperiorSkyblock2"));
-
-        this.lootablesManager = new LootablesManager(superiorSkyblock2Hook);
+        this.lootablesManager = new LootablesManager(superiorSkyblock2Hook);        	
         this.lootablesManager.createDefaultLootables();
         this.getLootablesManager().getLootManager().loadLootables();
 

@@ -6,6 +6,7 @@ import com.craftaro.core.lootables.loot.Drop;
 import com.craftaro.core.lootables.loot.DropUtils;
 import com.craftaro.ultimatestacker.UltimateStacker;
 import com.craftaro.ultimatestacker.api.stack.entity.EntityStack;
+import com.craftaro.ultimatestacker.hook.hooks.EpicSpawnersHook;
 import com.craftaro.ultimatestacker.settings.Settings;
 import com.craftaro.ultimatestacker.stackable.entity.EntityStackImpl;
 import org.bukkit.Bukkit;
@@ -72,15 +73,18 @@ public class DeathListeners implements Listener {
 
         //Respect MythicMobs
         if (plugin.getCustomEntityManager().isCustomEntity(entity)) return;
-
+        
+        List<Drop> drops = new ArrayList<>();
         boolean custom = Settings.CUSTOM_DROPS.getBoolean();
-        List<Drop> drops = custom ? plugin.getLootablesManager().getDrops(event.getEntity())
-                : event.getDrops().stream().map(Drop::new).collect(Collectors.toList());
+        if (!event.getEntity().hasMetadata("ESData")) {
+            drops = custom ? plugin.getLootablesManager().getDrops(event.getEntity())
+                    : event.getDrops().stream().map(Drop::new).collect(Collectors.toList());
 
-        if (custom)
-            for (ItemStack item : new ArrayList<>(event.getDrops()))
-                if (shouldDrop(event.getEntity(), item.getType()))
-                    drops.add(new Drop(item));
+            if (custom)
+                for (ItemStack item : new ArrayList<>(event.getDrops()))
+                    if (shouldDrop(event.getEntity(), item.getType()))
+                        drops.add(new Drop(item));
+        }
 
         if (plugin.getCustomEntityManager().getCustomEntity(entity) == null) {
             //Run commands here, or it will be buggy

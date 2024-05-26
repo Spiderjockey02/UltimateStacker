@@ -10,6 +10,7 @@ import com.craftaro.core.lootables.loot.LootManager;
 import com.craftaro.core.lootables.loot.Lootable;
 import com.craftaro.third_party.com.cryptomorin.xseries.XMaterial;
 import com.craftaro.ultimatestacker.UltimateStacker;
+import com.craftaro.ultimatestacker.hook.hooks.EpicSpawnersHook;
 import com.craftaro.ultimatestacker.hook.hooks.SuperiorSkyblock2Hook;
 import com.craftaro.ultimatestacker.settings.Settings;
 import org.bukkit.enchantments.Enchantment;
@@ -52,26 +53,26 @@ public class LootablesManager {
 
         if (entity instanceof Ageable && !((Ageable) entity).isAdult() && !(entity instanceof Zombie)
                 || !lootManager.getRegisteredLootables().containsKey(entity.getType().name())) return toDrop;
+        
+        	 Lootable lootable = lootManager.getRegisteredLootables().get(entity.getType().name());
+             int looting = entity.getKiller() != null
+                     && entity.getKiller().getItemInHand().containsEnchantment(Enchantment.LOOT_BONUS_MOBS)
+                     ? entity.getKiller().getItemInHand().getEnchantmentLevel(Enchantment.LOOT_BONUS_MOBS)
+                     : 0;
 
-        Lootable lootable = lootManager.getRegisteredLootables().get(entity.getType().name());
-        int looting = entity.getKiller() != null
-                && entity.getKiller().getItemInHand().containsEnchantment(Enchantment.LOOT_BONUS_MOBS)
-                ? entity.getKiller().getItemInHand().getEnchantmentLevel(Enchantment.LOOT_BONUS_MOBS)
-                : 0;
-
-        int rerollChance = Settings.REROLL.getBoolean() ? looting / (looting + 1) : 0;
-
-        for (Loot loot : lootable.getRegisteredLoot())
-            toDrop.addAll(runLoot(entity, loot, rerollChance, looting));
-
-        //Apply SuperiorSkyblock2 mob-drops multiplier if present
-        if (superiorSkyblock2Hook.isEnabled()) {
-            for (Drop drop : toDrop) {
-                if (drop.getItemStack() == null) continue; //Maybe it is just exp
-                drop.getItemStack().setAmount(superiorSkyblock2Hook.getDropMultiplier(entity.getLocation()) * drop.getItemStack().getAmount());
-            }
-        }
-
+             int rerollChance = Settings.REROLL.getBoolean() ? looting / (looting + 1) : 0;
+             
+             for (Loot loot : lootable.getRegisteredLoot())
+             	toDrop.addAll(runLoot(entity, loot, rerollChance, looting));
+           
+             //Apply SuperiorSkyblock2 mob-drops multiplier if present
+             if (superiorSkyblock2Hook.isEnabled()) {
+                 for (Drop drop : toDrop) {
+                     if (drop.getItemStack() == null) continue; //Maybe it is just exp
+                     drop.getItemStack().setAmount(superiorSkyblock2Hook.getDropMultiplier(entity.getLocation()) * drop.getItemStack().getAmount());
+                 }
+             }
+       
         return toDrop;
     }
 
@@ -117,7 +118,8 @@ public class LootablesManager {
     }
 
     public List<Drop> getDrops(LivingEntity entity, int times) {
-        return getDrops(entity, times, 3);
+    	return getDrops(entity, times, 3);
+        
     }
 
     public List<Drop> getDrops(LivingEntity entity, int times, int attempts) {
@@ -125,78 +127,88 @@ public class LootablesManager {
         List<Drop> toDrop = new ArrayList<>();
         if (entity instanceof Ageable && !((Ageable) entity).isAdult() && !(entity instanceof Zombie)
                 || !lootManager.getRegisteredLootables().containsKey(entity.getType().name())) return toDrop;
+        
+        
+        if (entity.hasMetadata("ESData")) {
+        	List<Drop> Edrops = new EpicSpawnersHook(true).getDrops(entity);
+        	System.out.println(Edrops);
+        	for (int i = 0; i < times; i++) {
+        		toDrop.addAll(Edrops);
+        	}
+        } else {
+        	 Lootable lootable = lootManager.getRegisteredLootables().get(entity.getType().name());
+             int looting = entity.getKiller() != null
+                     && entity.getKiller().getItemInHand().containsEnchantment(Enchantment.LOOT_BONUS_MOBS)
+                     ? entity.getKiller().getItemInHand().getEnchantmentLevel(Enchantment.LOOT_BONUS_MOBS)
+                     : 0;
 
-        Lootable lootable = lootManager.getRegisteredLootables().get(entity.getType().name());
-        int looting = entity.getKiller() != null
-                && entity.getKiller().getItemInHand().containsEnchantment(Enchantment.LOOT_BONUS_MOBS)
-                ? entity.getKiller().getItemInHand().getEnchantmentLevel(Enchantment.LOOT_BONUS_MOBS)
-                : 0;
+             double extraChance = looting / (looting + 1.0);
 
-        double extraChance = looting / (looting + 1.0);
+             boolean isCharged = entity instanceof Creeper && ((Creeper) entity).isPowered();
 
-        boolean isCharged = entity instanceof Creeper && ((Creeper) entity).isPowered();
+             //Run main loot
+                 for (Loot loot : lootable.getRegisteredLoot()) {
+                     if (loot.isRequireCharged() && !isCharged) continue;
+                     if (!loot.getOnlyDropFor().isEmpty() && loot.getOnlyDropFor().stream().noneMatch(type -> entity.getKiller() != null && type == entity.getKiller().getType())) continue;
+                     int finalLooting = loot.isAllowLootingEnchant() ? looting : 0;
 
-        //Run main loot
-        for (Loot loot : lootable.getRegisteredLoot()) {
-            if (loot.isRequireCharged() && !isCharged) continue;
-            if (!loot.getOnlyDropFor().isEmpty() && loot.getOnlyDropFor().stream().noneMatch(type -> entity.getKiller() != null && type == entity.getKiller().getType())) continue;
-            int finalLooting = loot.isAllowLootingEnchant() ? looting : 0;
+                     long max = (long) (((long) (loot.getMax() + finalLooting) * times) * (loot.getChance()/100 + (loot.isAllowLootingEnchant() ? extraChance : 0)));
+                     long min = (long) ((loot.getMin()) * times * (loot.getChance()/100));
 
-            long max = (long) (((long) (loot.getMax() + finalLooting) * times) * (loot.getChance()/100 + (loot.isAllowLootingEnchant() ? extraChance : 0)));
-            long min = (long) ((loot.getMin()) * times * (loot.getChance()/100));
+                     long amount = ThreadLocalRandom.current().nextLong((max - min) + 1) + min;
 
-            long amount = ThreadLocalRandom.current().nextLong((max - min) + 1) + min;
-
-            if (loot.getMaterial() != null && amount > 0) {
-                ItemStack item = entity.getFireTicks() > 0
-                        ? loot.getBurnedMaterial() != null ? loot.getBurnedMaterial().parseItem() : loot.getMaterial().parseItem()
-                        : loot.getMaterial().parseItem();
-                if (amount > MAX_INT) {
-                    while (amount > MAX_INT) {
-                        ItemStack loop = item.clone();
-                        loop.setAmount(MAX_INT);
-                        amount -= MAX_INT;
-                        toDrop.add(new Drop(loop));
-                    }
-                }
-                //Leftover
-                item.setAmount((int) amount);
-                toDrop.add(new Drop(item));
-            }
-
-
-            //Run child loot //TODO: remove duplicated code
-            for (Loot child : loot.getChildLoot()) {
-                if (child.isRequireCharged() && !isCharged) continue;
-                if (child.getOnlyDropFor().size() != 0 && child.getOnlyDropFor().stream().noneMatch(type -> entity.getKiller() != null && type == entity.getKiller().getType())) continue;
-
-                int choildFinalLooting = child.isAllowLootingEnchant() ? looting : 0;
-
-                long childMax = (long) (((long) (child.getMax() + finalLooting) * times) * (child.getChance()/100 + (child.isAllowLootingEnchant() ? extraChance : 0)));
-                long childmin = (long) ((child.getMin()) * times * (child.getChance()/100));
-                childmin = (long) (childmin - childmin*0.90);
+                     if (loot.getMaterial() != null && amount > 0) {
+                         ItemStack item = entity.getFireTicks() > 0
+                                 ? loot.getBurnedMaterial() != null ? loot.getBurnedMaterial().parseItem() : loot.getMaterial().parseItem()
+                                 : loot.getMaterial().parseItem();
+                         if (amount > MAX_INT) {
+                             while (amount > MAX_INT) {
+                                 ItemStack loop = item.clone();
+                                 loop.setAmount(MAX_INT);
+                                 amount -= MAX_INT;
+                                 toDrop.add(new Drop(loop));
+                             }
+                         }
+                         //Leftover
+                         item.setAmount((int) amount);
+                         toDrop.add(new Drop(item));
+                     }
 
 
-                long childamount = ThreadLocalRandom.current().nextLong((childMax - childmin) + 1) + childmin;
+                     //Run child loot //TODO: remove duplicated code
+                     for (Loot child : loot.getChildLoot()) {
+                         if (child.isRequireCharged() && !isCharged) continue;
+                         if (child.getOnlyDropFor().size() != 0 && child.getOnlyDropFor().stream().noneMatch(type -> entity.getKiller() != null && type == entity.getKiller().getType())) continue;
 
-                if (childamount > 0) {
-                    ItemStack item = entity.getFireTicks() > 0
-                            ? child.getBurnedMaterial() != null ? child.getBurnedMaterial().parseItem() : child.getMaterial().parseItem()
-                            : child.getMaterial().parseItem();
-                    if (childamount > MAX_INT) {
-                        while (childamount > MAX_INT) {
-                            ItemStack loop = item.clone();
-                            loop.setAmount(MAX_INT);
-                            childamount -= MAX_INT;
-                            toDrop.add(new Drop(loop));
-                        }
-                    }
-                    //Leftover
-                    item.setAmount((int) childamount);
-                    toDrop.add(new Drop(item));
-                }
-            }
-        }
+                         int choildFinalLooting = child.isAllowLootingEnchant() ? looting : 0;
+
+                         long childMax = (long) (((long) (child.getMax() + finalLooting) * times) * (child.getChance()/100 + (child.isAllowLootingEnchant() ? extraChance : 0)));
+                         long childmin = (long) ((child.getMin()) * times * (child.getChance()/100));
+                         childmin = (long) (childmin - childmin*0.90);
+
+
+                         long childamount = ThreadLocalRandom.current().nextLong((childMax - childmin) + 1) + childmin;
+
+                         if (childamount > 0) {
+                             ItemStack item = entity.getFireTicks() > 0
+                                     ? child.getBurnedMaterial() != null ? child.getBurnedMaterial().parseItem() : child.getMaterial().parseItem()
+                                     : child.getMaterial().parseItem();
+                             if (childamount > MAX_INT) {
+                                 while (childamount > MAX_INT) {
+                                     ItemStack loop = item.clone();
+                                     loop.setAmount(MAX_INT);
+                                     childamount -= MAX_INT;
+                                     toDrop.add(new Drop(loop));
+                                 }
+                             }
+                             //Leftover
+                             item.setAmount((int) childamount);
+                             toDrop.add(new Drop(item));
+                         }
+                     }
+                 } 	
+         }
+        
 
         if (toDrop.isEmpty() && attempts > 0) {
             return getDrops(entity, times, attempts);
